@@ -1,0 +1,17 @@
+---
+title: "Reproducible Research - Peer Assessment 2"
+author: "chowchowsheep"
+date: "December 5, 2018"
+output: 
+  html_document:
+    keep_md: yes
+---
+
+## Downloading the file from source
+```{r}
+fileURL <- "https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2"
+
+download.file(fileURL, destfile = "storm.bz2")
+storm <- read.csv("storm.bz2")
+```
+```{r setu
