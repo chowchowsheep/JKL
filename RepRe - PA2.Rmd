@@ -14,4 +14,9 @@ fileURL <- "https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv
 download.file(fileURL, destfile = "storm.bz2")
 storm <- read.csv("storm.bz2")
 ```
-```{r setu
+
+## Summarizing data by event type
+
+### Total fatalities and injuries by event type
+```{r}
+harmful <- aggregate(storm$FATALITIES, by=list(EVTYPE=storm$EVTYPE), FUN=mean)
