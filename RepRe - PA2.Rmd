@@ -6,6 +6,11 @@ output:
   html_document:
     keep_md: yes
 ---
+## Downloading tools
+```{r}
+install.packages("tidyverse")
+library(tidyverse)
+```
 
 ## Downloading the file from source
 ```{r}
@@ -15,8 +20,66 @@ download.file(fileURL, destfile = "storm.bz2")
 storm <- read.csv("storm.bz2")
 ```
 
-## Summarizing data by event type
+## Cleaning data
 
-### Total fatalities and injuries by event type
 ```{r}
-harmful <- aggregate(storm$FATALITIES, by=list(EVTYPE=storm$EVTYPE), FUN=mean)
+storm.clean <- subset(storm, FATALITIES > 0 | INJURIES > 0 | PROPDMG > 0 | CROPDMG > 0) %>% as_tibble()
+```
+
+## Total fatalities and injuries by event type
+```{r}
+fatalities <- aggregate(storm.clean$FATALITIES, by=list(EVTYPE=storm.clean$EVTYPE), FUN=sum)
+
+names(fatalities) <- c("Event", "Fatalities")
+fatalities <- fatalities[order(fatalities$Fatalities,decreasing=TRUE),]
+
+injuries <- aggregate(storm.clean$INJURIES, by=list(EVTYPE=storm.clean$EVTYPE), FUN=sum)
+
+names(injuries) <- c("Event", "Injuries")
+injuries <- injuries[order(injuries$Injuries,decreasing=TRUE),]
+
+```
+
+## Cleaning damage data
+```{r}
+
+storm1 <- storm.clean %>%
+  mutate(PROPDMG = case_when(
+    PROPDMGEXP == "K" ~ PROPDMG * 1e3,
+    PROPDMGEXP == "M" ~ PROPDMG * 1e6,
+    PROPDMGEXP == "B" ~ PROPDMG * 1e9,
+    PROPDMGEXP == ~ PROPDMG
+  )) 
+  
+storm2 <- storm.clean %>%
+  mutate(CROPDMG = case_when(
+    CROPDMGEXP == "K" ~ CROPDMG * 1e3,
+    CROPDMGEXP == "M" ~ CROPDMG * 1e6,
+    CROPDMGEXP == "B" ~ CROPDMG * 1e9,
+    is.null(CROPDMGEXP) ~ CROP?DMG
+  ))
+```
+
+## Total property and crop damage by event type
+```{r}
+property <- storm1 %>% group_by(EVTYPE) %>%  summarize(Prop.dmg=sum(PROPDMG))
+
+names(property) <- c("Event", "Prop.damage")
+property <- property[order(property$Prop.damage,decreasing=TRUE),]
+
+crop <- storm2 %>% group_by(EVTYPE) %>%  summarize(Crop.dmg=sum(CROPDMG))
+
+names(crop) <- c("Event", "Crop.damage")
+crop <- crop[order(crop$Crop.damage,decreasing=TRUE),]
+```
+
+
+#Results
+
+## Fatalities and injuries
+```{r}
+top.fatalities <- fatalities %>% slice(1:10)
+ggplot(top.fatalities, aes(x = reorder(Event, Fatalities), y = Fatalities)) + 
+    geom_bar(stat = "identity",fill="blue") + coord_flip() + 
+     labs(x = "Event types", y = "Fatalities", title = "Top 10 Fatalities Events" )
+```
