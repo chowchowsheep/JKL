@@ -8,7 +8,6 @@ output:
 ---
 ## Downloading tools
 ```{r}
-install.packages("tidyverse")
 library(tidyverse)
 ```
 
@@ -28,39 +27,48 @@ storm.clean <- subset(storm, FATALITIES > 0 | INJURIES > 0 | PROPDMG > 0 | CROPD
 
 ## Total fatalities and injuries by event type
 ```{r}
-fatalities <- aggregate(storm.clean$FATALITIES, by=list(EVTYPE=storm.clean$EVTYPE), FUN=sum)
+fatalities <- storm.clean %>% group_by(EVTYPE) %>%  summarize(Fatalities=sum(FATALITIES))
 
 names(fatalities) <- c("Event", "Fatalities")
 fatalities <- fatalities[order(fatalities$Fatalities,decreasing=TRUE),]
 
-injuries <- aggregate(storm.clean$INJURIES, by=list(EVTYPE=storm.clean$EVTYPE), FUN=sum)
+injuries <- storm.clean %>% group_by(EVTYPE) %>%  summarize(Injuries=sum(INJURIES))
 
 names(injuries) <- c("Event", "Injuries")
 injuries <- injuries[order(injuries$Injuries,decreasing=TRUE),]
 
+fat.inj <- left_join(injuries,fatalities,by=c("Event"= "Event"))
+fat.inj$Combined <- fat.inj$Injuries*0.5 + fat.inj$Fatalities
+fat.inj <- fat.inj[order(fat.inj$Combined,decreasing=TRUE),]
+
 ```
 
 ## Cleaning damage data
+### To account for the scaling factor, we multiplied the damage by the corresponding scale. For other factors which are non-standard, the recording might have been done incorrectly, so we use a factor of 1 for those observations
 ```{r}
-
 storm1 <- storm.clean %>%
   mutate(PROPDMG = case_when(
     PROPDMGEXP == "K" ~ PROPDMG * 1e3,
     PROPDMGEXP == "M" ~ PROPDMG * 1e6,
     PROPDMGEXP == "B" ~ PROPDMG * 1e9,
-    PROPDMGEXP == ~ PROPDMG
+    PROPDMGEXP == "" ~ PROPDMG * 1,
+    TRUE ~ PROPDMG
   )) 
   
 storm2 <- storm.clean %>%
   mutate(CROPDMG = case_when(
     CROPDMGEXP == "K" ~ CROPDMG * 1e3,
+    CROPDMGEXP == "k" ~ CROPDMG * 1e3,
     CROPDMGEXP == "M" ~ CROPDMG * 1e6,
+    CROPDMGEXP == "m" ~ CROPDMG * 1e6,
     CROPDMGEXP == "B" ~ CROPDMG * 1e9,
-    is.null(CROPDMGEXP) ~ CROP?DMG
+    CROPDMGEXP == "" ~ CROPDMG * 1,
+    TRUE ~ CROPDMG
   ))
 ```
 
 ## Total property and crop damage by event type
+### 1. Summing up the property and crop damage, based on event type, then joining the two dataframes. The total damage is calculated by summing the crop and property damage.
 ```{r}
 property <- storm1 %>% group_by(EVTYPE) %>%  summarize(Prop.dmg=sum(PROPDMG))
 
@@ -71,15 +79,37 @@ crop <- storm2 %>% group_by(EVTYPE) %>%  summarize(Crop.dmg=sum(CROPDMG))
 
 names(crop) <- c("Event", "Crop.damage")
 crop <- crop[order(crop$Crop.damage,decreasing=TRUE),]
+
+crop.prop <- left_join(crop,property,by=c("Event"= "Event"))
+crop.prop$Total <- crop.prop$Crop.damage + crop.prop$Prop.damage
+
+crop.prop <- crop.prop[order(crop.prop$Total,decreasing=TRUE),]
 ```
 
 
 #Results
 
 ## Fatalities and injuries
+
+### We combined the fatalities and injuries caused by weather events. Given that injuries are less impactful compared to fatalities, injuries were given a factor of 0.5, i.e. two injuries have the same impact on human health as one fatality.
+
 ```{r}
-top.fatalities <- fatalities %>% slice(1:10)
-ggplot(top.fatalities, aes(x = reorder(Event, Fatalities), y = Fatalities)) + 
-    geom_bar(stat = "identity",fill="blue") + coord_flip() + 
-     labs(x = "Event types", y = "Fatalities", title = "Top 10 Fatalities Events" )
+top.health <- fat.inj %>% slice(1:10)
+ggplot(top.health, aes(x = reorder(Event, Combined), y = Combined)) + 
+    geom_bar(stat = "identity",fill="red") + coord_flip() + 
+     labs(x = "Event types", y = "Combined", title = "Top 10 events with highest impact on human health" )
 ```
+
+### Tornado is the most impactful event to human health, with the excessive heat coming in far behind at second place.
+
+## Most damaging events to property and crops
+
+### We sum up the damage to both property and crop and identified the top 10 most damaging events.
+```{r}
+top.dmg <- crop.prop %>% slice(1:10)
+ggplot(top.dmg, aes(x = reorder(Event, Total), y = Total)) + 
+    geom_bar(stat = "identity",fill="red") + coord_flip() + 
+     labs(x = "Event types", y = "Total", title = "Top 10 events with highest property & crop damage" )
+```
+
+### Floods are the most damaging weather event, almost doubling the damage done by hurricanes/typhoons in second place.
